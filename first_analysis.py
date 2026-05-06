@@ -4,8 +4,8 @@ import requests
 import json
 import matplotlib.pyplot as plt
 
-date_to_timestamp = lambda x: calendar.timegm((datetime.datetime.strptime(x, "%d-%m-%Y")).timetuple())
-timestamp_to_date = lambda x: datetime.datetime.utcfromtimestamp(x).strftime("%d-%m-%Y")
+# date_to_timestamp = lambda x: calendar.timegm((datetime.datetime.strptime(x, "%d-%m-%Y")).timetuple())
+# timestamp_to_date = lambda x: datetime.datetime.utcfromtimestamp(x).strftime("%d-%m-%Y")
 
 # currencyPair="ETH_USDT"
 
@@ -58,13 +58,25 @@ timestamp_to_date = lambda x: datetime.datetime.utcfromtimestamp(x).strftime("%d
 # final_date = int(datetime.datetime.utcnow().timestamp())
 # final_date = date_to_timestamp("16-07-2020")
 
-initial_date = date_to_timestamp("03-05-2026")
-final_date = int(datetime.datetime.utcnow().timestamp())
+# initial_date = date_to_timestamp("03-05-2026")
+# final_date = int(datetime.datetime.utcnow().timestamp())
 
 plt.ion()
 
 while True:
-  url = "https://api.poloniex.com/markets/ETH_USDT/candles?interval=MINUTE_15&startTime=" + str(initial_date * 1000) + "&endTime=" + str(final_date * 1000)
+  # final_date = datetime.datetime.now()
+  # final_timestamp = calendar.timegm(final_date.timetuple())
+  final_timestamp = int(datetime.datetime.utcnow().timestamp())
+
+  past_seconds = 48 * 60 * 60 # Quantidade de segundos existentes em 48hs
+
+  initial_timestamp = final_timestamp - past_seconds 
+
+  # print(timestamp_to_date(initial_timestamp))
+  # print(timestamp_to_date(final_timestamp))
+  # input() 
+
+  url = "https://api.poloniex.com/markets/ETH_USDT/candles?interval=MINUTE_15&startTime=" + str(initial_timestamp * 1000) + "&endTime=" + str(final_timestamp * 1000)
 
   req = requests.get(url)
   data = json.loads(req.text)
