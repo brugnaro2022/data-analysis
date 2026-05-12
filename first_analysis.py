@@ -3,6 +3,77 @@ import calendar
 import requests
 import json
 import matplotlib.pyplot as plt
+from polosdk import SpotRestClient
+import time
+import urllib.parse
+import hmac
+import hashlib
+from config import api_key, secret_key
+from unittest.mock import MagicMock
+
+api_key = api_key
+secret_key = secret_key
+
+client_ = SpotRestClient(api_key=api_key, api_secret=secret_key)
+
+client = MagicMock()
+client.accounts().get_balances.return_value = [
+    {
+        'accountId': '392487043327959040',
+        'accountType': 'SPOT',
+        'balances': [
+            {'currency': 'BTC', 'available': '0.5', 'hold': '0'},
+            {'currency': 'USDT', 'available': '1000.0', 'hold': '0'},
+            {'currency': 'ETH', 'available': '2.3', 'hold': '0'},
+        ]
+    }
+]
+
+def get_balance(currency):
+  try:
+    balances = client.accounts().get_balances(account_type='SPOT')
+    # print(client.accounts())
+    for account in balances:
+      for b in account['balances']:
+        if b['currency'] == currency:
+          return float(b['available'])
+    return None
+  except Exception as e:
+    # print(e)
+    return None
+
+  # try:
+  #   params = {'command': 'returnBalances', 'nonce': int(time.time()*1000)}
+  #   params_encoded = urllib.parse.urlencode(params).encode('utf8')
+  #   params_signed = hmac.new(secret_key, params_encoded, hashlib.sha512).hexdigest()
+
+  #   headers = {'Key': api_key, 'Sign': params_signed}
+
+  #   req = requests.post('https://poloniex.com/tradingApi', headers=headers, data=params)
+
+  #   res = json.loads(req.text)
+
+  #   return float(res[currency])
+  # except:
+  #   return None
+
+# print(get_balance('BTC'))
+# print(get_balance('USDT'))
+
+def get_purchase_price(currency):
+  url_ticker = 'https://api.poloniex.com/markets/' + currency + '/ticker24h'
+  req = requests.get(url_ticker)
+  res = json.loads(req.text)
+  last_price = float(res['ask'])
+  return last_price
+
+def get_sale_price(currency):
+  url_ticker = 'https://api.poloniex.com/markets/' + currency + '/ticker24h'
+  req = requests.get(url_ticker)
+  res = json.loads(req.text)
+  last_price = float(res['bid'])
+  return last_price
+
 
 # date_to_timestamp = lambda x: calendar.timegm((datetime.datetime.strptime(x, "%d-%m-%Y")).timetuple())
 # timestamp_to_date = lambda x: datetime.datetime.utcfromtimestamp(x).strftime("%d-%m-%Y")
@@ -63,40 +134,38 @@ import matplotlib.pyplot as plt
 
 plt.ion()
 
-while True:
-  # final_date = datetime.datetime.now()
-  # final_timestamp = calendar.timegm(final_date.timetuple())
-  final_timestamp = int(datetime.datetime.utcnow().timestamp())
+
+def get_quotes(currency):
+  final_timestamp = (int(datetime.datetime.utcnow().timestamp())) + 3 * 60 *60
 
   past_seconds = 48 * 60 * 60 # Quantidade de segundos existentes em 48hs
 
   initial_timestamp = final_timestamp - past_seconds 
 
-  # print(timestamp_to_date(initial_timestamp))
-  # print(timestamp_to_date(final_timestamp))
-  # input() 
-
-  url = "https://api.poloniex.com/markets/ETH_USDT/candles?interval=MINUTE_15&startTime=" + str(initial_timestamp * 1000) + "&endTime=" + str(final_timestamp * 1000)
+  url = "https://api.poloniex.com/markets/"+ currency + "/candles?interval=MINUTE_15&startTime=" + str(initial_timestamp * 1000) + "&endTime=" + str(final_timestamp * 1000)
 
   req = requests.get(url)
   data = json.loads(req.text)
 
+  return data
+
+while True:
+  data = get_quotes("ETH_USDT")
   quotes = []
   for e in data:
     quotes.append(float(e[3]))
-
-  # print(quotes)
-  # input()
-
-  print(quotes[-1:])
-  # input()
-
+  
+  fast_mean = [sum(quotes[-8:]) / 8] * len(quotes)
+  slow_mean = [sum(quotes[-21:]) / 21] * len(quotes)
+  
   ga = plt.gca()
   ga.clear()
   
-  plt.plot(quotes)
+  plt.plot(quotes[-50:])
   plt.xticks(range(0, len(quotes) + 1, 20))
   plt.title(f"Última cotação: {quotes[-1]}")
+  plt.plot(fast_mean[-50:], color='red')
+  plt.plot(slow_mean[-50:], color='green')
   plt.draw()
   plt.pause(5)
 
