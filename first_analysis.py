@@ -14,33 +14,15 @@ from unittest.mock import MagicMock
 api_key = api_key
 secret_key = secret_key
 
-client_ = SpotRestClient(api_key=api_key, api_secret=secret_key)
+# client = SpotRestClient(api_key=api_key, api_secret=secret_key)
 
 client = MagicMock()
-client.accounts().get_balances.return_value = [
-    {
-        'accountId': '392487043327959040',
-        'accountType': 'SPOT',
-        'balances': [
-            {'currency': 'BTC', 'available': '0.5', 'hold': '0'},
-            {'currency': 'USDT', 'available': '1000.0', 'hold': '0'},
-            {'currency': 'ETH', 'available': '2.3', 'hold': '0'},
-        ]
-    }
-]
+client.orders().create.return_value = {'id': '111', 'clientOrderId': ''}
+
+mock_balances = {'USDT': 1000.0, 'ETH': 2.3, 'BTC': 0.5, 'ANDYETH': 1.3}
 
 def get_balance(currency):
-  try:
-    balances = client.accounts().get_balances(account_type='SPOT')
-    # print(client.accounts())
-    for account in balances:
-      for b in account['balances']:
-        if b['currency'] == currency:
-          return float(b['available'])
-    return None
-  except Exception as e:
-    # print(e)
-    return None
+  return mock_balances.get(currency, 0.0)
 
   # try:
   #   params = {'command': 'returnBalances', 'nonce': int(time.time()*1000)}
@@ -132,7 +114,7 @@ def get_sale_price(currency):
 # initial_date = date_to_timestamp("03-05-2026")
 # final_date = int(datetime.datetime.utcnow().timestamp())
 
-plt.ion()
+# plt.ion()
 
 
 def get_quotes(currency):
@@ -149,23 +131,161 @@ def get_quotes(currency):
 
   return data
 
+def make_purchase(value, currency):
+  base = currency.split('_')[0]
+  balance = get_balance('USDT')
+
+  if balance < value:
+    return -1
+
+  price = get_purchase_price(currency)
+  eth_bought = value / price
+  mock_balances['USDT'] -= value
+  mock_balances[base] = mock_balances.get(base, 0.0) + eth_bought
+
+  print(f'{base} comprado: {eth_bought:.4f}')
+
+  res = client.orders().create(side='BUY', amount=str(value), symbol=currency)
+  return res['id'] if 'id' in res else -2
+
+def make_sale(quantity, currency):
+  base = currency.split('_')[0]
+  balance = get_balance(base)
+
+  if balance < quantity:
+    return -1
+
+  price = get_sale_price(currency)
+  usdt_received = quantity * price
+  mock_balances[base] -= quantity
+  mock_balances['USDT'] = mock_balances.get('USDT', 0.0) + usdt_received
+
+  print(f'{base} vendido: {quantity:.4f} a {price} = {usdt_received:.2f} USDT')
+
+  res = client.orders().create(side='SELL', quantity=str(quantity), symbol=currency)
+  return res['id'] if 'id' in res else -2
+
+# print('Saldo inicial')
+# print('USDT:', get_balance('USDT'))
+# print('ETH:', get_balance('ETH'))
+# print('Preço ETH_USDT:', get_purchase_price('ETH_USDT'))
+
+# print(10*'-')
+# print('Compra 10 ETH_USDT')
+# print(make_purchase(10, 'ETH_USDT'))
+
+# print(10*'-')
+# print('Saldo atualizado')
+# print('USDT:', get_balance('USDT'))
+# print('ETH:', get_balance('ETH'))
+# print('Preço ETH_USDT:', get_purchase_price('ETH_USDT'))
+
+# print(10*'-')
+# print('Venda 0.001 ETH_USDT')
+# print(make_sale(0.001, 'ETH_USDT'))
+
+# print(10*'-')
+# print('Saldo após venda')
+# print('USDT:', get_balance('USDT'))
+# print('ETH:', get_balance('ETH'))
+# print('Preço ETH_USDT:', get_sale_price('ETH_USDT'))
+
+# input()
+
+
+
+
+# req = requests.get('https://api.poloniex.com/markets/ticker24h')
+# tickers = json.loads(req.text)
+
+# tickers_usdt = [t for t in tickers if t['symbol'].endswith('_USDT')]
+# tickers_sorted = sorted(tickers_usdt, key=lambda x: abs(float(x['dailyChange'])), reverse=True)
+
+# for t in tickers_sorted[:10]:
+#     print(f"{t['symbol']}: {float(t['dailyChange'])*100:.2f}%")
+
+# input()
+
+
+
+# ANDYETH_USDT: 23978.57%
+# SACHI_USDT: 3117.16%
+# UXLINK_USDT: 1587.34%
+# BNKR_USDT: 1582.65%
+# POD_USDT: 1106.84%
+# BOSS_USDT: 609.09%
+# MRDN_USDT: 352.83%
+# COPPERINU_USDT: 184.85%
+# MANYUETH_USDT: 182.71%
+# PENG_USDT: 159.80%
+
+
+
+AWAITING_PURCHASE_SIGNAL = 0
+AWAITING_SELL_SIGNAL = 1
+STATE = AWAITING_PURCHASE_SIGNAL
+
+CURRENCY = "ETH_USDT"
+OPERATION_VALUE = 10
+
+PURCHASE_VALUE = 0
+PURCHASE_SELL = 0
+PROFITABILITY = 0
+
+WORK_MODE = "V"
+
+THRESHOLD = 0.0025
+
 while True:
-  data = get_quotes("ETH_USDT")
+  data = get_quotes(CURRENCY)
+
   quotes = []
   for e in data:
     quotes.append(float(e[3]))
   
   fast_mean = [sum(quotes[-8:]) / 8] * len(quotes)
   slow_mean = [sum(quotes[-21:]) / 21] * len(quotes)
-  
-  ga = plt.gca()
-  ga.clear()
-  
-  plt.plot(quotes[-50:])
-  plt.xticks(range(0, len(quotes) + 1, 20))
-  plt.title(f"Última cotação: {quotes[-1]}")
-  plt.plot(fast_mean[-50:], color='red')
-  plt.plot(slow_mean[-50:], color='green')
-  plt.draw()
-  plt.pause(5)
 
+  if STATE == AWAITING_PURCHASE_SIGNAL:
+    print(f'[SINAL] Aguardando compra | fast: {fast_mean[0]:.2f} | slow: {slow_mean[0]:.2f} | threshold: {slow_mean[0] + (slow_mean[0] * THRESHOLD):.2f}')
+    if fast_mean[0] > slow_mean[0] + (slow_mean[0] * THRESHOLD):
+      if WORK_MODE == "R":
+        print('[COMPRA REAL] Sinal de compra detectado!')
+        make_purchase(OPERATION_VALUE, CURRENCY)
+      elif WORK_MODE == "V":
+        PURCHASE_VALUE = get_purchase_price(CURRENCY)
+        print('Valor da compra: ' + str(PURCHASE_VALUE))
+
+      STATE = AWAITING_SELL_SIGNAL
+
+
+  elif STATE == AWAITING_SELL_SIGNAL:
+    print(f'[SINAL] Aguardando venda | fast: {fast_mean[0]:.2f} | slow: {slow_mean[0]:.2f} | threshold: {slow_mean[0] - (slow_mean[0] * THRESHOLD):.2f}')
+    if fast_mean[0] < slow_mean[0] - (slow_mean[0] * THRESHOLD):
+      if WORK_MODE == "R":
+        print('[VENDA] Sinal de venda detectado!')
+        make_sale(OPERATION_VALUE, CURRENCY)
+      elif WORK_MODE == "V":
+        PURCHASE_SELL = get_sale_price(CURRENCY)
+        print('Valor da venda: ' + str(PURCHASE_SELL))
+
+        # PROFITABILITY = PROFITABILITY + ((PURCHASE_SELL - PURCHASE_VALUE) / PURCHASE_VALUE) * 100
+        PROFITABILITY = PROFITABILITY + (((PURCHASE_SELL * 100) / PURCHASE_VALUE) - 100)
+        print('Rentabilidade: ' + str(PROFITABILITY) + '%')
+      
+      STATE = AWAITING_PURCHASE_SIGNAL
+
+
+
+  # ga = plt.gca()
+  # ga.clear()
+  
+  # plt.plot(quotes[-50:])
+  # plt.xticks(range(0, len(quotes) + 1, 20))
+  # plt.title(f"Última cotação: {quotes[-1]}")
+  # plt.plot(fast_mean[-50:], color='red')
+  # plt.plot(slow_mean[-50:], color='green')
+  # plt.draw()
+  # plt.pause(5)
+
+  time.sleep(2)
